@@ -73,7 +73,7 @@ ConnectionPool/
 #### 编译步骤
 
 1.  克隆项目:
-    git clone <your-repo-url>
+    git clone git@github.com:leafs-cl/connection_pool.git
     cd ConnectionPool
     
 
@@ -191,6 +191,6 @@ target_link_libraries(your_target PRIVATE ConnectionPool::ConnectionPool)
 
 ## 获取帮助
 如有问题或建议，可以通过以下方式联系：
-•   提交 <your-github-repo-url>/issues。
+•   提交 [https://github.com/leafs-cl/connection_pool.git/issues]。
 
 •   发送邮件至: [lic@mail.nwpu.edu.cn]。

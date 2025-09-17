@@ -66,7 +66,7 @@ ConnectionPool/
 
 1.  **Clone the project:**
     ```bash
-    git clone <your-repo-url>
+    git clone git@github.com:leafs-cl/connection_pool.git
     cd ConnectionPool
     ```
 
@@ -182,5 +182,5 @@ This project is licensed under the MIT License. See the LICENSE file for details
 ## Getting Help
 
 If you have questions or suggestions, you can contact us via:
-*   Submitting an issue at: `<your-github-repo-url>/issues`.
+*   Submitting an issue at: `https://github.com/leafs-cl/connection_pool.git/issues`.
 *   Sending an email to: [lic@mail.nwpu.edu.cn].
