@@ -52,7 +52,13 @@ private:
     int _connectionTimeout; // time out for obtaining connection
 
     std::queue<std::unique_ptr<connection>> _connectionQue; // queue to save connection
-    std::mutex _queueMutex;
+    // bool mutex, allow entry multiple times, only release same times as entrying, lock are really released，depend on inner counter
+    // Ownership semantic, only tasks have mutex can release
+    // Will upgrade thread priority who owner mutex when higher priority task occpy cpu, in case of higher priority task blocking
+    // depends on RTOS(FreeRTOS, uCOS-III)
+    // Inner task manager contains pointer of task, inner method can take task off original priority list
+    // and add to new, so do recovering
+    std::mutex _queueMutex; 
     std::atomic_int _connectionCnt; // number of active connection
     std::atomic<bool> _shutdown; // shutdown flag
     std::condition_variable cv;     // communication between producers and consumers

@@ -13,6 +13,7 @@ connection_pool::connection_pool() : _connectionCnt(0){
     // Similar as java thread pool, connection pool keeps core connection,
     // which will not be destoryed after use
     for(int i=0; i<_initSize; i++){
+        // Create connection object using default constructor
         auto p = std::make_unique<connection>();
         p->connect(_ip, _port, _username, _password, _dbname);
         p->refreshsAliveTime();
@@ -24,7 +25,10 @@ connection_pool::connection_pool() : _connectionCnt(0){
         _connectionCnt++;
     }
 
-    // Start background connection producer thread
+    // Start background connection producer thread(named as produce)
+    // Use std::bind to make produce thread call produceConnectionTask, because produceConnectionTask
+    // needs "this" pointer
+    // So produce must pass "this"
     thread produce(std::bind(&connection_pool::produceConnectionTask, this));
     produce.detach();
     // Start background connection to collect thread
@@ -36,7 +40,7 @@ connection_pool::connection_pool() : _connectionCnt(0){
 std::shared_ptr<connection_pool> connection_pool::getconnect_pool()
 {
     static std::shared_ptr<connection_pool> pool(new connection_pool());
-    return pool;
+    return pool; // return copied shared ptr
 };
 
 
@@ -132,10 +136,15 @@ bool connection_pool::loadConfigFile(const std::string& filename) {
 // Running in independent thread
 void connection_pool::produceConnectionTask(){
     for(;;)
-    {
+    {   
+        // _queueMutex is used to protect shared resouce
+        // unique_lock automically lock "_queueMutex" and unlock to release resouce
+        // unique lock is more heavy than lock guard, but allows manual lock and support condition
         unique_lock<mutex> lock(_queueMutex);
-        while(!_connectionQue.empty()){
-            cv.wait(lock);
+        // Check if existing idle connection, if having, don't need to produce, block producer
+        // Otherwise, double check if empty and start producing
+        while(!_connectionQue.empty()){ // to avoid Spurious Wakeup
+            cv.wait(lock); // atomic unlock and block thread(depends on atomically operate blocking queue)
         }
 
         if(_connectionCnt < _maxSize){
@@ -145,17 +154,18 @@ void connection_pool::produceConnectionTask(){
             _connectionQue.push(std::move(p));
             _connectionCnt++;
         }
-        cv.notify_all();
+        // Notify all consumers
+        cv.notify_all(); // non-blocking, keep running
     }
 }
 
 // Expose to business, to obtain a free connection
 connection_pool::PooledConnection connection_pool::getconnection()
 {
-    unique_lock<mutex> lock(_queueMutex);
+    unique_lock<mutex> lock(_queueMutex); // Depends on cas and Mutex primitives
     while(_connectionQue.empty()) // All connections have been borrowed
     {
-        if( cv_status::timeout == cv.wait_for(lock, chrono::microseconds (_connectionTimeout))){
+        if( cv_status::timeout == cv.wait_for(lock, chrono::microseconds (_connectionTimeout))){ // wait for notify
             if(_connectionQue.empty())
             {
                 WARN_LOG("Obtain free connection failed!");
@@ -168,14 +178,17 @@ connection_pool::PooledConnection connection_pool::getconnection()
     if (!conn->isValid()){
         WARN_LOG("Obtained invalid connection!");
         try {
-            conn->connect(_ip,_port,_username,_password,_dbname);
+            conn->reconnect(_ip,_port,_username,_password,_dbname);
             conn->refreshsAliveTime();
         } catch(const std::exception& e){
             _connectionCnt--;
             cv.notify_all();
         }
     }
-    connection* rawConn = conn.release();
+    connection* rawConn = conn.release(); // release ownership and return original pointer
+    // Must use shared from this(inner weak ptr)
+    // Class needs to be managed by shared ptr
+    // when shared ptr initialized, base class "weak and mutable member" will be set as "this" 
     std::weak_ptr<connection_pool> poolWeakPtr = this->shared_from_this();
     auto deleter = [poolWeakPtr](connection* p){ // use weak ptr instead of this
         // return pooled connection to pool
